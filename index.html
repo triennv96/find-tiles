@@ -104,9 +104,10 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .kpi b{display:block;font-size:20px;color:var(--accent)}
 .kpi span{font-size:12px;color:#6b6b70}
 .kpi.low div{background:var(--warn-soft)} .kpi.low b{color:var(--warn)}
-.specs{width:100%;border-collapse:collapse;font-size:13px}
-.specs td{padding:7px 0;border-bottom:1px solid var(--line);vertical-align:top}
-.specs td:first-child{color:var(--muted);width:44%;padding-right:12px}
+.sh{margin:4px 0 12px;font-size:16px}
+.specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;margin:0}
+.specs dt{color:var(--muted);font-size:12.5px;margin-bottom:2px}
+.specs dd{margin:0;font-size:14px;font-weight:500;overflow-wrap:anywhere}
 .acts{display:flex;gap:8px;margin-top:18px}
 .acts .btn{flex:1}
 
@@ -197,12 +198,13 @@ const FILTERS = [
   ['line', 'Dòng sản phẩm'], ['brand', 'Nhãn'], ['colorGroup', 'Màu'], ['pattern', 'Kiểu lát'],
   ['size', 'Kích thước'], ['thickness', 'Độ dày tấm'],
 ];
+const dec = v => String(v).replace('.', ',');
+// Thông tin sản phẩm — đúng danh sách & thứ tự như bản Glide
 const SPECS = [
-  ['line', 'Dòng sản phẩm'], ['brand', 'Nhãn'], ['color', 'Màu sắc'], ['size', 'Kích thước (mm)'],
-  ['thickness', 'Độ dày tấm (mm)'], ['layer', 'Lớp chống mài mòn (mm)'], ['pattern', 'Kiểu lát'],
-  ['core', 'Màu xương'], ['emboss', 'Vân trùng khớp'], ['uv', 'UV'], ['lock', 'Hèm khoá'],
-  ['bevel', 'Vát mép'], ['edgePaint', 'Sơn mép'], ['underlay', 'Tấm đế'],
-  ['piecesPerBox', 'Tấm / hộp'], ['m2PerBox', 'm² / hộp'],
+  ['line', 'Dòng sản phẩm'], ['pattern', 'Kiểu lát'], ['color', 'Màu sắc'],
+  ['size', 'Kích thước', v => v.replace(/x/i, '×')], ['thickness', 'Độ dày tấm', dec], ['layer', 'Độ dày Layer', dec],
+  ['emboss', 'Vân trùng khớp'], ['lock', 'Loại hèm khóa'], ['edgePaint', 'Sơn mép'], ['underlay', 'Loại tấm đế'],
+  ['piecesPerBox', 'Tiêu chuẩn đóng hộp'], ['m2PerBox', 'Quy cách m2/hộp', dec], ['weight', 'Trọng lượng Hộp', v => dec(v) + ' ±1 Kg'],
 ];
 
 const S = {
@@ -322,11 +324,11 @@ function openDetail(code) {
   const stock = it.stockBox != null ? `<div class="kpi ${it.stockBox < low ? 'low' : ''}">
         <div><b>${fmt(it.stockBox)}</b><span>hộp tồn kho</span></div>
         <div><b>${fmt(it.stockM2)}</b><span>m² tồn kho</span></div></div>` : '';
-  const rows = SPECS.filter(([k]) => it[k]).map(([k, l]) => `<tr><td>${l}</td><td>${esc(it[k])}</td></tr>`).join('');
+  const rows = SPECS.filter(([k]) => it[k]).map(([k, l, f]) => `<div><dt>${l}</dt><dd>${esc(f ? f(it[k]) : it[k])}</dd></div>`).join('');
   $('#modal').innerHTML = `<button class="x" data-act="close" aria-label="Đóng"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     <div class="detail"><div class="img">${it.image ? `<a href="${img(it.image, 3000)}" target="_blank" rel="noopener" title="Xem ảnh gốc"><img src="${img(it.image, 600)}" alt="" onload="if(!this.dataset.hd){this.dataset.hd=1;const h=new Image();h.onload=()=>this.src=h.src;h.src='${img(it.image, 1400)}'}"></a>` : ''}</div>
     <div class="info"><h2>${esc(it.code)}</h2><div class="sub">${esc([it.line, it.brand, it.size].filter(Boolean).join(' · '))}</div>
-    ${stock}<table class="specs">${rows}</table>
+    ${stock}<h3 class="sh">Thông tin sản phẩm</h3><dl class="specs">${rows}</dl>
     <div class="acts"><button class="btn primary" data-act="copy" data-code="${esc(it.code)}">Copy mã</button>
     ${it.folder ? `<a class="btn" href="${esc(it.folder)}" target="_blank" rel="noopener">Thư mục ảnh ↗</a>` : ''}</div></div></div>`;
   show();
