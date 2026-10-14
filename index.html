@@ -20,6 +20,7 @@
   --ok:#15803d; --shadow:0 1px 2px rgba(0,0,0,.06),0 4px 16px rgba(0,0,0,.05);
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0;height:100%}
 body{background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit;color:inherit}
@@ -115,6 +116,34 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .card p.ln{color:var(--text);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kpi.low div{background:var(--warn-soft)} .kpi.low b{color:var(--warn)}
 .sh{margin:4px 0 12px;font-size:16px}
+/* Bộ tính vật tư trong khung chi tiết */
+.calc{border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 20px;background:#fcfbff}
+.calc .sh{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.calc .sh svg{color:var(--accent)}
+.seg{display:inline-flex;background:var(--chip);border-radius:9px;padding:3px;margin-bottom:10px}
+.seg button{padding:5px 12px;border-radius:7px;font-size:13px;color:#55555a}
+.seg button.on{background:var(--panel);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.fields{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.fld{display:flex;flex-direction:column;gap:4px;flex:1;min-width:90px}
+.fld span{font-size:12px;color:var(--muted)}
+.fld input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);font-size:16px;outline:none;font-variant-numeric:tabular-nums}
+.fld input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.times{padding-bottom:10px;color:var(--muted)}
+.waste{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:12px 0 4px}
+.waste > span{font-size:12px;color:var(--muted);margin-right:2px}
+.waste .chip{padding:5px 9px}
+.wcustom{display:inline-flex;align-items:center;gap:3px;font-size:13px;color:var(--muted)}
+.waste input{width:52px;padding:5px 8px;border:1px solid var(--line);border-radius:999px;font-size:16px;text-align:center;background:var(--panel);outline:none}
+.res{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.res div{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+.res b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.res span{font-size:12px;color:var(--muted)}
+.res .main{grid-column:1/-1;background:var(--accent);border-color:var(--accent);color:#fff}
+.res .main b{font-size:24px}
+.res .main span{color:rgba(255,255,255,.82)}
+.res .ok b{color:var(--ok)} .res .bad b{color:var(--warn)}
+.calc .hint{font-size:12.5px;color:var(--muted);margin-top:10px}
+.calc .share{margin-top:12px}
 .specs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px;margin:0}
 .specs dt{color:var(--muted);font-size:12.5px;margin-bottom:2px}
 .specs dd{margin:0;font-size:14px;font-weight:500;overflow-wrap:anywhere}
@@ -358,6 +387,133 @@ function renderFilters() {
     <div class="ffoot"><button class="btn" id="fclear">Xoá tất cả</button><button class="btn primary" id="fdone">Xong</button></div>`;
 }
 
+/* ---------- Bộ tính vật tư ---------- */
+// Đọc số kiểu VN/EN: "10,25 m2" → 10.25, "2.07662" → 2.07662, "1,094.5" → 1094.5
+function numOf(v) {
+  const m = String(v ?? '').match(/\d[\d.,]*/);
+  if (!m) return NaN;
+  let t = m[0];
+  if (t.includes(',') && t.includes('.')) t = t.replace(/,/g, '');
+  else if (t.includes(',')) t = t.replace(',', '.');
+  return parseFloat(t);
+}
+const n2 = (x, d = 2) => Number.isFinite(x) ? x.toLocaleString('vi-VN', {maximumFractionDigits: d}) : '–';
+const CALC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h4"/></svg>';
+
+// Thông số dùng để tính, lấy từ dữ liệu sẵn có của mã
+function calcSpec(sec, it) {
+  if (sec.id === 'pk') {                                   // phụ kiện: tính theo chiều dài thanh (số đầu của kích thước, mm)
+    return {mode: 'len', barLen: numOf(it.size) / 1000, unit: unitOf(sec, it)};
+  }
+  const pcs = numOf(it.piecesPerBox ?? it.packing);
+  let m2 = numOf(it.m2PerBox);
+  if (!(m2 > 0)) {                                         // thiếu m²/hộp thì tính từ kích thước × số tấm
+    const [w, l] = String(it.size || '').split(/x|×/i).map(Number);
+    if (w && l && pcs) m2 = w * l / 1e6 * pcs;
+  }
+  return {mode: 'area', m2PerBox: m2, pcsPerBox: pcs > 0 ? pcs : NaN, kgPerBox: numOf(it.weight) > 0 ? numOf(it.weight) : NaN};
+}
+function defaultWaste(it) {
+  return /xương cá|chevron|cá/i.test(it.pattern || '') ? 10 : 5;   // lát xương cá hao hụt nhiều hơn
+}
+
+function calcHTML(sec, it) {
+  const sp = calcSpec(sec, it);
+  if (sp.mode === 'area' && !(sp.m2PerBox > 0)) return '';
+  if (sp.mode === 'len' && !(sp.barLen > 0)) return '';
+  const saved = store.get('ft:calc') || {};
+  const w = defaultWaste(it);
+  const inputs = sp.mode === 'len'
+    ? `<div class="fields"><label class="fld"><span>Tổng chiều dài cần (m)</span><input id="cLen" inputmode="decimal" placeholder="vd 36" value="${esc(saved.len || '')}"></label></div>`
+    : `<div class="seg" role="tablist"><button type="button" data-cm="m2" class="${saved.mode !== 'lw' ? 'on' : ''}">Nhập m²</button><button type="button" data-cm="lw" class="${saved.mode === 'lw' ? 'on' : ''}">Dài × Rộng</button></div>
+       <div class="fields" id="cM2box" ${saved.mode === 'lw' ? 'hidden' : ''}><label class="fld"><span>Diện tích cần (m²)</span><input id="cM2" inputmode="decimal" placeholder="vd 25" value="${esc(saved.m2 || '')}"></label></div>
+       <div class="fields" id="cLWbox" ${saved.mode === 'lw' ? '' : 'hidden'}><label class="fld"><span>Dài (m)</span><input id="cL" inputmode="decimal" placeholder="vd 5,2" value="${esc(saved.l || '')}"></label><span class="times">×</span><label class="fld"><span>Rộng (m)</span><input id="cW" inputmode="decimal" placeholder="vd 4" value="${esc(saved.w || '')}"></label></div>`;
+  return `<section class="calc" id="calc">
+    <h3 class="sh">${CALC_ICON}Tính vật tư</h3>
+    ${inputs}
+    <div class="waste"><span>Hao hụt</span>${[3, 5, 8, 10, 15].map(x => `<button type="button" class="chip ${x === w ? 'on' : ''}" data-w="${x}">${x}%</button>`).join('')}<label class="wcustom"><input id="cWaste" inputmode="decimal" value="${w}" aria-label="Hao hụt (%)">%</label></div>
+    <div class="res" id="cRes"></div>
+    <div class="hint" id="cHint"></div>
+    <button type="button" class="btn share" id="cShare">Chia sẻ kết quả</button>
+  </section>`;
+}
+
+function bindCalc(sec, it) {
+  const box = $('#calc');
+  if (!box) return;
+  const sp = calcSpec(sec, it);
+  const v = id => numOf($('#' + id)?.value);
+  let mode = (store.get('ft:calc') || {}).mode === 'lw' ? 'lw' : 'm2';
+  let last = '';
+
+  function run() {
+    const waste = Math.max(0, v('cWaste') || 0) / 100;
+    const saved = store.get('ft:calc') || {};
+    let html = '', hint = '', text = '';
+    const stock = it.stockBox;
+    if (sp.mode === 'len') {
+      const len = v('cLen');
+      store.set('ft:calc', {...saved, len: $('#cLen').value});
+      if (!(len > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = `Thanh dài ${n2(sp.barLen)} m. Nhập tổng chiều dài cần để tính số thanh.`; last = ''; return; }
+      const need = len * (1 + waste);
+      const bars = Math.ceil(need / sp.barLen - 1e-9);
+      const enough = stock == null ? null : stock >= bars;
+      html = `<div class="main"><b>${n2(bars, 0)} ${sp.unit}</b><span>cần mua (thanh dài ${n2(sp.barLen)} m)</span></div>
+        <div><b>${n2(need)} m</b><span>chiều dài gồm hao hụt</span></div>
+        <div><b>${n2(bars * sp.barLen - need)} m</b><span>dư sau khi cắt</span></div>
+        ${enough == null ? '' : `<div class="${enough ? 'ok' : 'bad'}" style="grid-column:1/-1"><b>${enough ? 'Đủ hàng' : 'Thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}</b><span>tồn kho ${n2(stock, 0)} ${sp.unit}</span></div>`}`;
+      text = `${it.code} (${it.line || ''})\nChiều dài: ${n2(len)} m + hao hụt ${n2(waste * 100)}% = ${n2(need)} m\n→ ${bars} ${sp.unit} (thanh ${n2(sp.barLen)} m)` + (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} ${sp.unit} – ${enough ? 'đủ hàng' : 'thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}`);
+    } else {
+      const area = mode === 'lw' ? v('cL') * v('cW') : v('cM2');
+      store.set('ft:calc', {...saved, mode, m2: $('#cM2').value, l: $('#cL').value, w: $('#cW').value});
+      if (!(area > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = `1 hộp = ${n2(sp.m2PerBox, 4)} m²${sp.pcsPerBox ? ' = ' + n2(sp.pcsPerBox, 0) + ' tấm' : ''}. Nhập diện tích để tính.`; last = ''; return; }
+      const need = area * (1 + waste);
+      const boxes = Math.ceil(need / sp.m2PerBox - 1e-9);
+      const buyM2 = boxes * sp.m2PerBox;
+      const pcs = boxes * sp.pcsPerBox;
+      const kg = boxes * sp.kgPerBox;
+      const enough = stock == null ? null : stock >= boxes;
+      html = `<div class="main"><b>${n2(boxes, 0)} hộp</b><span>cần mua · ${n2(buyM2)} m²</span></div>
+        <div><b>${n2(need)} m²</b><span>diện tích gồm hao hụt</span></div>
+        <div><b>${n2(buyM2 - need)} m²</b><span>dư so với cần</span></div>
+        ${Number.isFinite(pcs) ? `<div><b>${n2(pcs, 0)} tấm</b><span>tổng số tấm</span></div>` : ''}
+        ${Number.isFinite(kg) ? `<div><b>≈ ${n2(kg, 0)} kg</b><span>khối lượng (±1 kg/hộp)</span></div>` : ''}
+        ${enough == null ? '' : `<div class="${enough ? 'ok' : 'bad'}" style="grid-column:1/-1"><b>${enough ? 'Đủ hàng' : 'Thiếu ' + n2(boxes - stock, 0) + ' hộp'}</b><span>tồn kho ${n2(stock, 0)} hộp${it.stockM2 != null ? ' · ' + n2(it.stockM2, 0) + ' m²' : ''}</span></div>`}`;
+      hint = `1 hộp = ${n2(sp.m2PerBox, 4)} m²${sp.pcsPerBox ? ' = ' + n2(sp.pcsPerBox, 0) + ' tấm' : ''}${sp.kgPerBox ? ' ≈ ' + n2(sp.kgPerBox) + ' kg' : ''}.`;
+      text = `${it.code}${it.line ? ' (' + it.line + (it.brand ? ' · ' + it.brand : '') + ')' : ''}\n` +
+        `Diện tích: ${mode === 'lw' ? n2(v('cL')) + ' × ' + n2(v('cW')) + ' = ' : ''}${n2(area)} m² + hao hụt ${n2(waste * 100)}% = ${n2(need)} m²\n` +
+        `→ ${boxes} hộp = ${n2(buyM2)} m²` + (Number.isFinite(pcs) ? ` · ${n2(pcs, 0)} tấm` : '') + (Number.isFinite(kg) ? ` · ≈ ${n2(kg, 0)} kg` : '') +
+        (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} hộp – ${enough ? 'đủ hàng' : 'thiếu ' + n2(boxes - stock, 0) + ' hộp'}`);
+    }
+    $('#cRes').innerHTML = html;
+    $('#cHint').textContent = hint;
+    last = text;
+  }
+
+  box.addEventListener('input', e => {
+    if (e.target.id === 'cWaste') box.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', +b.dataset.w === v('cWaste')));
+    run();
+  });
+  box.addEventListener('click', e => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    e.stopPropagation();
+    if (t.dataset.w) { $('#cWaste').value = t.dataset.w; box.querySelectorAll('[data-w]').forEach(b => b.classList.toggle('on', b === t)); run(); }
+    else if (t.dataset.cm) {
+      mode = t.dataset.cm;
+      box.querySelectorAll('[data-cm]').forEach(b => b.classList.toggle('on', b === t));
+      $('#cM2box').hidden = mode !== 'm2'; $('#cLWbox').hidden = mode !== 'lw';
+      run();
+    }
+    else if (t.id === 'cShare') {
+      if (!last) return toast('Nhập số liệu trước đã');
+      if (navigator.share) navigator.share({text: last}).catch(() => {});
+      else navigator.clipboard?.writeText(last).then(() => toast('Đã copy kết quả'), () => toast('Không copy được'));
+    }
+  });
+  run();
+}
+
 function openDetail(code) {
   const sec = cur();
   const it = sec?.items.find(x => x.code === code);
@@ -370,9 +526,10 @@ function openDetail(code) {
   $('#modal').innerHTML = `<button class="x" data-act="close" aria-label="Đóng"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     <div class="detail"><div class="img">${it.image ? `<a href="${img(it.image, 3000)}" target="_blank" rel="noopener" title="Xem ảnh gốc"><img src="${img(it.image, 600)}" alt="" onload="if(!this.dataset.hd){this.dataset.hd=1;const h=new Image();h.onload=()=>this.src=h.src;h.src='${img(it.image, 1400)}'}"></a>` : ''}</div>
     <div class="info"><h2>${esc(it.code)}</h2><div class="sub">${esc(view().sub(it).filter(Boolean).join(' · '))}</div>
-    ${stock}<h3 class="sh">Thông tin sản phẩm</h3><dl class="specs">${rows}</dl>
+    ${stock}${calcHTML(sec, it)}<h3 class="sh">Thông tin sản phẩm</h3><dl class="specs">${rows}</dl>
     <div class="acts"><button class="btn primary" data-act="copy" data-code="${esc(it.code)}">Copy mã</button>
     ${it.folder ? `<a class="btn" href="${esc(it.folder)}" target="_blank" rel="noopener">Thư mục ảnh ↗</a>` : ''}</div></div></div>`;
+  bindCalc(sec, it);
   show();
 }
 
