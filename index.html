@@ -46,9 +46,13 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .updated{text-align:center;color:var(--accent);font-size:12px;font-weight:600;letter-spacing:.02em;margin:24px 0 16px;text-transform:uppercase}
 .tools{display:flex;justify-content:flex-end;gap:8px;margin-bottom:20px;position:relative}
 .search{position:relative;width:226px}
-.search input{width:100%;padding:9px 12px 9px 34px;border:0;border-radius:8px;background:#efeff1;outline:none}
+.search input{width:100%;padding:9px 34px 9px 34px;border:0;border-radius:8px;background:#efeff1;outline:none;-webkit-appearance:none;appearance:none}
+.search input::-webkit-search-cancel-button{display:none}
+.search .clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:24px;height:24px;border-radius:50%;display:none;place-items:center;color:var(--muted)}
+.search .clr:hover{background:#dcdce0;color:var(--text)}
+.search.has .clr{display:grid}
 .search input:focus{background:#e9e9ec;box-shadow:0 0 0 2px var(--accent-soft)}
-.search svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.search > svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted)}
 .fbtn{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;background:#efeff1;color:#55555a;min-width:126px}
 .fbtn .c{background:var(--accent);color:#fff;border-radius:9px;font-size:11px;padding:0 6px;font-weight:600}
 .fbtn svg:last-child{margin-left:auto}
@@ -135,8 +139,9 @@ button{cursor:pointer;background:none;border:0;padding:0}
   .main{padding:8px 16px 40px}
   .updated{margin:12px 0}
   .tools{justify-content:stretch}
-  .search{flex:1;width:auto}
-  .fbtn{min-width:0}
+  .search{flex:1;width:auto;min-width:0}
+  .search input{font-size:16px}   /* < 16px thì iPhone tự phóng to trang khi chạm vào ô */
+  .fbtn{min-width:0;flex:none}
   .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 12px}
   .card h3{margin:6px 2px 0;font-size:13px} .card p,.stock{margin-left:2px}
   .ov{padding:0;align-items:flex-end}
@@ -165,7 +170,8 @@ button{cursor:pointer;background:none;border:0;padding:0}
       <div class="tools">
         <label class="search">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input id="q" type="search" placeholder="Tìm kiếm" autocomplete="off">
+          <input id="q" type="search" placeholder="Tìm kiếm" autocomplete="off" enterkeyhint="search">
+          <button type="button" class="clr" id="qclr" aria-label="Xoá tìm kiếm"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
         </label>
         <button class="fbtn" id="fbtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M7 12h10M10 18h4"/></svg>
@@ -396,7 +402,16 @@ document.addEventListener('click', e => {
   else if (t.dataset.act === 'copy') navigator.clipboard?.writeText(t.dataset.code).then(() => toast('Đã copy ' + t.dataset.code));
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { hide(); $('#fpanel').classList.remove('open'); } });
-let qt; $('#q').addEventListener('input', e => { clearTimeout(qt); qt = setTimeout(() => { S.q = e.target.value; renderGrid(); }, 120); });
+let qt; $('#q').addEventListener('input', e => {
+  $('.search').classList.toggle('has', !!e.target.value);
+  clearTimeout(qt); qt = setTimeout(() => { S.q = e.target.value; renderGrid(); }, 120);
+});
+$('#qclr').addEventListener('click', e => {
+  e.preventDefault();
+  $('#q').value = ''; $('.search').classList.remove('has');
+  S.q = ''; renderGrid(); $('#q').focus();
+});
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter') e.target.blur(); });   // bấm "Tìm" trên bàn phím điện thoại thì ẩn bàn phím
 
 render();   // hiện ngay dữ liệu đã lưu lần trước (nếu có)
 load();     // rồi tải bản mới
