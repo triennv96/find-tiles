@@ -416,9 +416,20 @@ const CALC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" s
 
 // Thông số dùng để tính, lấy từ dữ liệu sẵn có của mã
 function calcSpec(sec, it) {
-  if (sec.id === 'pk') {                                   // phụ kiện: tính theo chiều dài thanh (số đầu của kích thước, mm)
-    return {mode: 'len', barLen: numOf(it.size) / 1000, unit: unitOf(sec, it),
-      kgPerBar: numOf(it.weightUnit) > 0 ? numOf(it.weightUnit) : NaN, perBox: numOf(it.packing) > 0 ? numOf(it.packing) : NaN};
+  if (sec.id === 'pk') {
+    // Phụ kiện: cách tính theo đơn vị tính ở cột E
+    //  - Thanh  → theo chiều dài (thanh dài = số đầu của kích thước, mm)
+    //  - Tấm    → mặt bậc: theo số bậc; lam/tấm ốp: theo diện tích (dài × rộng của 1 tấm)
+    //  - Cái, Bộ, Chiếc… → theo số lượng
+    const unit = unitOf(sec, it);
+    const base = {unit, kgPer: numOf(it.weightUnit) > 0 ? numOf(it.weightUnit) : NaN,
+      perBox: numOf(it.packing) > 0 ? numOf(it.packing) : NaN,
+      container: (String(it.packing || '').split('/')[1] || 'hộp').trim().toLowerCase()};   // "10 thanh/bó" → bó
+    const [a, b] = String(it.size || '').split(/x|×|\*/i).map(Number);
+    if (unit === 'thanh' && a > 0) return {...base, mode: 'len', barLen: a / 1000};
+    if (unit === 'tấm' && /bậc/i.test(it.line || '')) return {...base, mode: 'qty', qtyLabel: 'Số bậc cầu thang'};
+    if (unit === 'tấm' && a > 0 && b > 0) return {...base, mode: 'piece', pieceM2: a * b / 1e6};
+    return {...base, mode: 'qty', qtyLabel: `Số lượng cần (${unit})`};
   }
   const pcs = numOf(it.piecesPerBox ?? it.packing);
   let m2 = numOf(it.m2PerBox);
@@ -437,16 +448,18 @@ function calcHTML(sec, it) {
   if (sp.mode === 'area' && !(sp.m2PerBox > 0)) return '';
   if (sp.mode === 'len' && !(sp.barLen > 0)) return '';
   const saved = store.get('ft:calc') || {};
-  const w = defaultWaste(it);
+  const w = sp.mode === 'qty' ? 0 : defaultWaste(it);   // đếm theo cái/bộ/bậc thì mặc định không hao hụt
   const inputs = sp.mode === 'len'
     ? `<div class="fields"><label class="fld"><span>Tổng chiều dài cần (m)</span><input id="cLen" inputmode="decimal" placeholder="vd 36" value="${esc(saved.len || '')}"></label></div>`
+    : sp.mode === 'qty'
+    ? `<div class="fields"><label class="fld"><span>${esc(sp.qtyLabel)}</span><input id="cQty" inputmode="decimal" placeholder="vd 12" value="${esc(saved.qty || '')}"></label></div>`
     : `<div class="seg" role="tablist"><button type="button" data-cm="m2" class="${saved.mode !== 'lw' ? 'on' : ''}">Nhập m²</button><button type="button" data-cm="lw" class="${saved.mode === 'lw' ? 'on' : ''}">Dài × Rộng</button></div>
        <div class="fields" id="cM2box" ${saved.mode === 'lw' ? 'hidden' : ''}><label class="fld"><span>Diện tích cần (m²)</span><input id="cM2" inputmode="decimal" placeholder="vd 25" value="${esc(saved.m2 || '')}"></label></div>
        <div class="fields" id="cLWbox" ${saved.mode === 'lw' ? '' : 'hidden'}><label class="fld"><span>Dài (m)</span><input id="cL" inputmode="decimal" placeholder="vd 5,2" value="${esc(saved.l || '')}"></label><span class="times">×</span><label class="fld"><span>Rộng (m)</span><input id="cW" inputmode="decimal" placeholder="vd 4" value="${esc(saved.w || '')}"></label></div>`;
   return `<section class="calc" id="calc">
     <h3 class="sh">${CALC_ICON}Tính vật tư</h3>
     ${inputs}
-    <div class="waste"><span>Hao hụt</span>${[3, 5, 8, 10, 15].map(x => `<button type="button" class="chip ${x === w ? 'on' : ''}" data-w="${x}">${x}%</button>`).join('')}<label class="wcustom"><input id="cWaste" inputmode="decimal" value="${w}" aria-label="Hao hụt (%)">%</label></div>
+    <div class="waste"><span>Hao hụt</span>${(sp.mode === 'qty' ? [0, 3, 5, 10] : [3, 5, 8, 10, 15]).map(x => `<button type="button" class="chip ${x === w ? 'on' : ''}" data-w="${x}">${x}%</button>`).join('')}<label class="wcustom"><input id="cWaste" inputmode="decimal" value="${w}" aria-label="Hao hụt (%)">%</label></div>
     <div class="res" id="cRes"></div>
     <div class="hint" id="cHint"></div>
     <button type="button" class="btn share" id="cShare">Chia sẻ kết quả</button>
@@ -466,24 +479,47 @@ function bindCalc(sec, it) {
     const saved = store.get('ft:calc') || {};
     let html = '', hint = '', text = '';
     const stock = it.stockBox;
-    if (sp.mode === 'len') {
-      const len = v('cLen');
-      store.set('ft:calc', {...saved, len: $('#cLen').value});
-      if (!(len > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = `Thanh dài ${n2(sp.barLen)} m. Nhập tổng chiều dài cần để tính số thanh.`; last = ''; return; }
-      const need = len * (1 + waste);
-      const bars = Math.ceil(need / sp.barLen - 1e-9);
-      const enough = stock == null ? null : stock >= bars;
-      const kg = bars * sp.kgPerBar;
-      const fullBox = Math.floor(bars / sp.perBox), odd = bars - fullBox * sp.perBox;
-      const boxTxt = !Number.isFinite(sp.perBox) ? '' : fullBox ? `${n2(fullBox, 0)} hộp${odd ? ' + ' + n2(odd, 0) + ' ' + sp.unit : ''}` : `${n2(odd, 0)} ${sp.unit} lẻ`;
-      html = `<div class="main"><b>${n2(bars, 0)} ${sp.unit}</b><span>cần mua (thanh dài ${n2(sp.barLen)} m)</span></div>
-        <div><b>${n2(need)} m</b><span>chiều dài gồm hao hụt</span></div>
-        <div><b>${n2(bars * sp.barLen - need)} m</b><span>dư sau khi cắt</span></div>
-        ${Number.isFinite(sp.perBox) ? `<div><b>${boxTxt}</b><span>quy cách ${n2(sp.perBox, 0)} ${sp.unit}/hộp</span></div>` : ''}
-        ${Number.isFinite(kg) ? `<div><b>≈ ${n2(kg, 1)} kg</b><span>khối lượng (${n2(sp.kgPerBar)} kg/${sp.unit})</span></div>` : ''}
-        ${enough == null ? '' : `<div class="${enough ? 'ok' : 'bad'}" style="grid-column:1/-1"><b>${enough ? 'Đủ hàng' : 'Thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}</b><span>tồn kho ${n2(stock, 0)} ${sp.unit}</span></div>`}`;
-      text = `${it.code} (${it.line || ''})\nChiều dài: ${n2(len)} m + hao hụt ${n2(waste * 100)}% = ${n2(need)} m\n→ ${bars} ${sp.unit} (thanh ${n2(sp.barLen)} m)` +
-        (boxTxt ? ` = ${boxTxt}` : '') + (Number.isFinite(kg) ? ` · ≈ ${n2(kg, 1)} kg` : '') + (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} ${sp.unit} – ${enough ? 'đủ hàng' : 'thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}`);
+    if (sp.mode !== 'area') {
+      const U = sp.unit;
+      let count, basis, extra = '', hintTxt = '';
+      if (sp.mode === 'len') {
+        const len = v('cLen');
+        store.set('ft:calc', {...saved, len: $('#cLen').value});
+        hintTxt = `1 ${U} dài ${n2(sp.barLen)} m. Nhập tổng chiều dài cần để tính.`;
+        if (!(len > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = hintTxt; last = ''; return; }
+        const need = len * (1 + waste);
+        count = Math.ceil(need / sp.barLen - 1e-9);
+        basis = `Chiều dài: ${n2(len)} m + hao hụt ${n2(waste * 100)}% = ${n2(need)} m`;
+        extra = `<div><b>${n2(need)} m</b><span>chiều dài gồm hao hụt</span></div><div><b>${n2(count * sp.barLen - need)} m</b><span>dư sau khi cắt</span></div>`;
+      } else if (sp.mode === 'piece') {
+        const area = mode === 'lw' ? v('cL') * v('cW') : v('cM2');
+        store.set('ft:calc', {...saved, mode, m2: $('#cM2').value, l: $('#cL').value, w: $('#cW').value});
+        hintTxt = `1 ${U} = ${n2(sp.pieceM2, 3)} m². Nhập diện tích cần ốp để tính.`;
+        if (!(area > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = hintTxt; last = ''; return; }
+        const need = area * (1 + waste);
+        count = Math.ceil(need / sp.pieceM2 - 1e-9);
+        basis = `Diện tích: ${mode === 'lw' ? n2(v('cL')) + ' × ' + n2(v('cW')) + ' = ' : ''}${n2(area)} m² + hao hụt ${n2(waste * 100)}% = ${n2(need)} m²`;
+        extra = `<div><b>${n2(need)} m²</b><span>diện tích gồm hao hụt</span></div><div><b>${n2(count * sp.pieceM2)} m²</b><span>diện tích ${n2(count, 0)} ${U}</span></div>`;
+      } else {
+        const q = v('cQty');
+        store.set('ft:calc', {...saved, qty: $('#cQty').value});
+        if (!(q > 0)) { $('#cRes').innerHTML = ''; $('#cHint').textContent = ''; last = ''; return; }
+        count = Math.ceil(q * (1 + waste) - 1e-9);
+        basis = `${sp.qtyLabel}: ${n2(q)}${waste ? ' + hao hụt ' + n2(waste * 100) + '%' : ''}`;
+      }
+      const enough = stock == null ? null : stock >= count;
+      const kg = count * sp.kgPer;
+      const C = sp.container;
+      const fullBox = Math.floor(count / sp.perBox), odd = count - fullBox * sp.perBox;
+      const boxTxt = !Number.isFinite(sp.perBox) ? '' : fullBox ? `${n2(fullBox, 0)} ${C}${odd ? ' + ' + n2(odd, 0) + ' ' + U : ''}` : `${n2(odd, 0)} ${U} lẻ`;
+      html = `<div class="main"><b>${n2(count, 0)} ${U}</b><span>cần mua${sp.mode === 'len' ? ` (${U} dài ${n2(sp.barLen)} m)` : ''}</span></div>
+        ${extra}
+        ${boxTxt ? `<div><b>${boxTxt}</b><span>quy cách ${esc(it.packing)}</span></div>` : ''}
+        ${Number.isFinite(kg) ? `<div><b>≈ ${n2(kg, 1)} kg</b><span>khối lượng (${n2(sp.kgPer)} kg/${U})</span></div>` : ''}
+        ${enough == null ? '' : `<div class="${enough ? 'ok' : 'bad'}" style="grid-column:1/-1"><b>${enough ? 'Đủ hàng' : 'Thiếu ' + n2(count - stock, 0) + ' ' + U}</b><span>tồn kho ${n2(stock, 0)} ${U}</span></div>`}`;
+      hint = sp.mode === 'qty' ? '' : hintTxt.replace(/ Nhập.*$/, '');
+      text = `${it.code} (${it.line || ''})\n${basis}\n→ ${count} ${U}` + (boxTxt ? ` = ${boxTxt}` : '') + (Number.isFinite(kg) ? ` · ≈ ${n2(kg, 1)} kg` : '') +
+        (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} ${U} – ${enough ? 'đủ hàng' : 'thiếu ' + n2(count - stock, 0) + ' ' + U}`);
     } else {
       const area = mode === 'lw' ? v('cL') * v('cW') : v('cM2');
       store.set('ft:calc', {...saved, mode, m2: $('#cM2').value, l: $('#cL').value, w: $('#cW').value});
