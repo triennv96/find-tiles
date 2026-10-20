@@ -279,7 +279,8 @@ const VIEW = {
   pk: {
     sub: it => [it.line],
     filters: [['line', 'Dòng sản phẩm'], ['size', 'Kích thước']],
-    specs: [['line', 'Dòng sản phẩm'], ['size', 'Kích thước', sizeFmt], ['unit', 'Đơn vị tính']],
+    specs: [['line', 'Dòng sản phẩm'], ['size', 'Kích thước', sizeFmt], ['unit', 'Đơn vị tính'], ['packing', 'Quy cách'],
+      ['weightUnit', 'Trọng lượng', (v, it) => dec(v) + ' Kg/' + String(it.unit || 'thanh').toLowerCase()]],
   },
 };
 
@@ -416,7 +417,8 @@ const CALC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" s
 // Thông số dùng để tính, lấy từ dữ liệu sẵn có của mã
 function calcSpec(sec, it) {
   if (sec.id === 'pk') {                                   // phụ kiện: tính theo chiều dài thanh (số đầu của kích thước, mm)
-    return {mode: 'len', barLen: numOf(it.size) / 1000, unit: unitOf(sec, it)};
+    return {mode: 'len', barLen: numOf(it.size) / 1000, unit: unitOf(sec, it),
+      kgPerBar: numOf(it.weightUnit) > 0 ? numOf(it.weightUnit) : NaN, perBox: numOf(it.packing) > 0 ? numOf(it.packing) : NaN};
   }
   const pcs = numOf(it.piecesPerBox ?? it.packing);
   let m2 = numOf(it.m2PerBox);
@@ -471,11 +473,17 @@ function bindCalc(sec, it) {
       const need = len * (1 + waste);
       const bars = Math.ceil(need / sp.barLen - 1e-9);
       const enough = stock == null ? null : stock >= bars;
+      const kg = bars * sp.kgPerBar;
+      const fullBox = Math.floor(bars / sp.perBox), odd = bars - fullBox * sp.perBox;
+      const boxTxt = !Number.isFinite(sp.perBox) ? '' : fullBox ? `${n2(fullBox, 0)} hộp${odd ? ' + ' + n2(odd, 0) + ' ' + sp.unit : ''}` : `${n2(odd, 0)} ${sp.unit} lẻ`;
       html = `<div class="main"><b>${n2(bars, 0)} ${sp.unit}</b><span>cần mua (thanh dài ${n2(sp.barLen)} m)</span></div>
         <div><b>${n2(need)} m</b><span>chiều dài gồm hao hụt</span></div>
         <div><b>${n2(bars * sp.barLen - need)} m</b><span>dư sau khi cắt</span></div>
+        ${Number.isFinite(sp.perBox) ? `<div><b>${boxTxt}</b><span>quy cách ${n2(sp.perBox, 0)} ${sp.unit}/hộp</span></div>` : ''}
+        ${Number.isFinite(kg) ? `<div><b>≈ ${n2(kg, 1)} kg</b><span>khối lượng (${n2(sp.kgPerBar)} kg/${sp.unit})</span></div>` : ''}
         ${enough == null ? '' : `<div class="${enough ? 'ok' : 'bad'}" style="grid-column:1/-1"><b>${enough ? 'Đủ hàng' : 'Thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}</b><span>tồn kho ${n2(stock, 0)} ${sp.unit}</span></div>`}`;
-      text = `${it.code} (${it.line || ''})\nChiều dài: ${n2(len)} m + hao hụt ${n2(waste * 100)}% = ${n2(need)} m\n→ ${bars} ${sp.unit} (thanh ${n2(sp.barLen)} m)` + (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} ${sp.unit} – ${enough ? 'đủ hàng' : 'thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}`);
+      text = `${it.code} (${it.line || ''})\nChiều dài: ${n2(len)} m + hao hụt ${n2(waste * 100)}% = ${n2(need)} m\n→ ${bars} ${sp.unit} (thanh ${n2(sp.barLen)} m)` +
+        (boxTxt ? ` = ${boxTxt}` : '') + (Number.isFinite(kg) ? ` · ≈ ${n2(kg, 1)} kg` : '') + (enough == null ? '' : `\nTồn kho: ${n2(stock, 0)} ${sp.unit} – ${enough ? 'đủ hàng' : 'thiếu ' + n2(bars - stock, 0) + ' ' + sp.unit}`);
     } else {
       const area = mode === 'lw' ? v('cL') * v('cW') : v('cM2');
       store.set('ft:calc', {...saved, mode, m2: $('#cM2').value, l: $('#cL').value, w: $('#cW').value});
@@ -535,7 +543,7 @@ function openDetail(code) {
   const stock = it.stockBox != null ? `<div class="kpi ${it.stockBox < low ? 'low' : ''} ${it.stockM2 == null ? 'one' : ''}">
         <div><b>${fmt(it.stockBox)}</b><span>${unitOf(sec, it)} tồn kho</span></div>
         ${it.stockM2 != null ? `<div><b>${fmt(it.stockM2)}</b><span>m² tồn kho</span></div>` : ''}</div>` : '';
-  const rows = view().specs.filter(([k]) => it[k]).map(([k, l, f]) => `<div><dt>${l}</dt><dd>${esc(f ? f(it[k]) : it[k])}</dd></div>`).join('');
+  const rows = view().specs.filter(([k]) => it[k]).map(([k, l, f]) => `<div><dt>${l}</dt><dd>${esc(f ? f(it[k], it) : it[k])}</dd></div>`).join('');
   $('#modal').innerHTML = `<button class="x" data-act="close" aria-label="Đóng"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     <div class="detail"><div class="img">${it.image ? `<button type="button" class="zoom" data-act="zoom" data-img="${esc(it.image)}" aria-label="Xem ảnh toàn màn hình"><img src="${img(it.image, 600)}" alt="" onload="if(!this.dataset.hd){this.dataset.hd=1;const h=new Image();h.onload=()=>this.src=h.src;h.src='${img(it.image, 1400)}'}"></button>` : ''}</div>
     <div class="info"><h2>${esc(it.code)}</h2><div class="sub">${esc(view().sub(it).filter(Boolean).join(' · '))}</div>
