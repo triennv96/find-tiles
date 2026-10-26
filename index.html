@@ -84,6 +84,8 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .ph img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .25s,transform .3s}
 .ph img.ld{opacity:1}
 .card:hover .ph img{transform:scale(1.03)}
+.noimg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#a3a1a8;font-size:12px;background:#efeeeb}
+.detail .img .noimg{position:static;width:100%;aspect-ratio:4/3;border-radius:10px}
 .badge{position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);color:var(--text);font-size:11px;font-weight:600;padding:2px 7px;border-radius:5px}
 .card h3{margin:8px 8px 0;font-size:14px;font-weight:600;letter-spacing:.01em}
 .card p{margin:2px 8px 0;color:var(--muted);font-size:13px}
@@ -369,7 +371,7 @@ function renderGrid() {
   }
   const a = list(), badge = view().badge;
   $('#grid').innerHTML = a.length ? a.map((it, i) => `<button class="card" data-code="${esc(it.code)}">
-      <div class="ph">${it.image ? `<img src="${img(it.image, 600)}" loading="${i < 8 ? 'eager' : 'lazy'}" alt="${esc(it.code)}" onload="this.classList.add('ld')">` : ''}
+      <div class="ph">${it.image ? `<img src="${img(it.image, 600)}" loading="${i < 8 ? 'eager' : 'lazy'}" alt="${esc(it.code)}" onload="this.classList.add('ld')" onerror="this.replaceWith(Object.assign(document.createElement('div'),{innerHTML:NOIMG}).firstChild)">` : NOIMG}
         ${badge && it[badge] ? `<span class="badge">${esc(it[badge])}</span>` : ''}</div>
       <h3>${esc(it.code)}</h3>${sec.id === 'pk' && it.line ? `<p class="ln">${esc(it.line)}</p>` : ''}<p>${esc(sizeFmt(it.size || ''))}</p>${stockText(sec, it)}</button>`
   ).join('') : '<div class="empty" style="grid-column:1/-1">Không có mã nào khớp.</div>';
@@ -412,6 +414,7 @@ function numOf(v) {
   return parseFloat(t);
 }
 const n2 = (x, d = 2) => Number.isFinite(x) ? x.toLocaleString('vi-VN', {maximumFractionDigits: d}) : '–';
+const NOIMG = `<div class="noimg"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m21 16-5-5-9 9"/><path d="M3 3l18 18"/></svg><span>Chưa có ảnh</span></div>`;
 const CALC_ICON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 18h.01M12 18h4"/></svg>';
 
 // Thông số dùng để tính, lấy từ dữ liệu sẵn có của mã
@@ -581,7 +584,7 @@ function openDetail(code) {
         ${it.stockM2 != null ? `<div><b>${fmt(it.stockM2)}</b><span>m² tồn kho</span></div>` : ''}</div>` : '';
   const rows = view().specs.filter(([k]) => it[k]).map(([k, l, f]) => `<div><dt>${l}</dt><dd>${esc(f ? f(it[k], it) : it[k])}</dd></div>`).join('');
   $('#modal').innerHTML = `<button class="x" data-act="close" aria-label="Đóng"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-    <div class="detail"><div class="img">${it.image ? `<button type="button" class="zoom" data-act="zoom" data-img="${esc(it.image)}" aria-label="Xem ảnh toàn màn hình"><img src="${img(it.image, 600)}" alt="" onload="if(!this.dataset.hd){this.dataset.hd=1;const h=new Image();h.onload=()=>this.src=h.src;h.src='${img(it.image, 1400)}'}"></button>` : ''}</div>
+    <div class="detail"><div class="img">${it.image ? `<button type="button" class="zoom" data-act="zoom" data-img="${esc(it.image)}" aria-label="Xem ảnh toàn màn hình"><img src="${img(it.image, 600)}" alt="" onload="if(!this.dataset.hd){this.dataset.hd=1;const h=new Image();h.onload=()=>this.src=h.src;h.src='${img(it.image, 1400)}'}"></button>` : NOIMG}</div>
     <div class="info"><h2>${esc(it.code)}</h2><div class="sub">${esc(view().sub(it).filter(Boolean).join(' · '))}</div>
     ${stock}${calcHTML(sec, it)}<h3 class="sh">Thông tin sản phẩm</h3><dl class="specs">${rows}</dl>
     <div class="acts"><button class="btn primary" data-act="copy" data-code="${esc(it.code)}">Copy mã</button>
