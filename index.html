@@ -126,9 +126,14 @@ button{cursor:pointer;background:none;border:0;padding:0}
 .kpi.low div{background:var(--warn-soft)} .kpi.low b{color:var(--warn)}
 .sh{margin:4px 0 12px;font-size:16px}
 /* Bộ tính vật tư trong khung chi tiết */
-.calc{border:1px solid var(--line);border-radius:14px;padding:14px;margin:0 0 20px;background:#fcfbff}
-.calc .sh{display:flex;align-items:center;gap:8px;margin:0 0 10px}
-.calc .sh svg{color:var(--accent)}
+.calc{border:1px solid var(--line);border-radius:14px;margin:0 0 20px;background:#fcfbff}
+.calc summary{display:flex;align-items:center;gap:8px;padding:12px 14px;border-radius:14px;cursor:pointer;list-style:none;font-size:16px;font-weight:700;-webkit-user-select:none;user-select:none}
+.calc summary::-webkit-details-marker{display:none}
+.calc summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.calc summary svg{color:var(--accent)}
+.calc summary::after{content:"";margin-left:auto;width:8px;height:8px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:translateY(-2px) rotate(45deg);transition:transform .15s}
+.calc[open] summary::after{transform:translateY(2px) rotate(-135deg)}
+.calc-body{padding:2px 14px 14px}
 .seg{display:inline-flex;background:var(--chip);border-radius:9px;padding:3px;margin-bottom:10px}
 .seg button{padding:5px 12px;border-radius:7px;font-size:13px;color:#55555a}
 .seg button.on{background:var(--panel);color:var(--text);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.08)}
@@ -459,14 +464,16 @@ function calcHTML(sec, it) {
     : `<div class="seg" role="tablist"><button type="button" data-cm="m2" class="${saved.mode !== 'lw' ? 'on' : ''}">Nhập m²</button><button type="button" data-cm="lw" class="${saved.mode === 'lw' ? 'on' : ''}">Dài × Rộng</button></div>
        <div class="fields" id="cM2box" ${saved.mode === 'lw' ? 'hidden' : ''}><label class="fld"><span>Diện tích cần (m²)</span><input id="cM2" inputmode="decimal" placeholder="vd 25" value="${esc(saved.m2 || '')}"></label></div>
        <div class="fields" id="cLWbox" ${saved.mode === 'lw' ? '' : 'hidden'}><label class="fld"><span>Dài (m)</span><input id="cL" inputmode="decimal" placeholder="vd 5,2" value="${esc(saved.l || '')}"></label><span class="times">×</span><label class="fld"><span>Rộng (m)</span><input id="cW" inputmode="decimal" placeholder="vd 4" value="${esc(saved.w || '')}"></label></div>`;
-  return `<section class="calc" id="calc">
-    <h3 class="sh">${CALC_ICON}Tính vật tư</h3>
+  return `<details class="calc" id="calc">
+    <summary>${CALC_ICON}Tính vật tư</summary>
+    <div class="calc-body">
     ${inputs}
     <div class="waste"><span>Hao hụt</span>${(sp.mode === 'qty' ? [0, 3, 5, 10] : [3, 5, 8, 10, 15]).map(x => `<button type="button" class="chip ${x === w ? 'on' : ''}" data-w="${x}">${x}%</button>`).join('')}<label class="wcustom"><input id="cWaste" inputmode="decimal" value="${w}" aria-label="Hao hụt (%)">%</label></div>
     <div class="res" id="cRes"></div>
     <div class="hint" id="cHint"></div>
     <button type="button" class="btn share" id="cShare">Chia sẻ kết quả</button>
-  </section>`;
+    </div>
+  </details>`;
 }
 
 function bindCalc(sec, it) {
