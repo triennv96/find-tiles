@@ -27,6 +27,11 @@ button,input,select{font:inherit;color:inherit}
 button{cursor:pointer;background:none;border:0;padding:0}
 
 /* ---------- Layout ---------- */
+.tc{display:none;height:100vh;height:100dvh;background:#f5f6f8}
+.tc iframe{display:block;width:100%;height:100%;border:0}
+.on-tc .wrap{display:none}
+.on-tc .tc{display:block}
+.on-tc .main{padding:0}
 .app{display:flex;min-height:100%}
 .side{width:250px;flex:none;background:var(--panel);border-right:1px solid var(--line);position:sticky;top:0;height:100vh;display:flex;flex-direction:column;padding:16px 12px}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;font-weight:600;font-size:17px}
@@ -180,6 +185,7 @@ button{cursor:pointer;background:none;border:0;padding:0}
   .nav button svg{width:24px;height:24px}
   .nav button.on{color:var(--accent);font-weight:600;background:var(--accent-soft)!important;border-color:#d8c9fb}
   .nav .n{display:none}
+  .on-tc .tc{height:calc(100vh - 72px - env(safe-area-inset-bottom));height:calc(100dvh - 72px - env(safe-area-inset-bottom))}
   .main{padding:4px 16px calc(84px + env(safe-area-inset-bottom))}
   .updated{margin:12px 0}
   .toast{bottom:calc(80px + env(safe-area-inset-bottom))}
@@ -226,6 +232,7 @@ button{cursor:pointer;background:none;border:0;padding:0}
       </div>
       <div class="grid" id="grid"></div>
     </div>
+    <div class="tc" id="tc"></div>
   </main>
 </div>
 
@@ -256,6 +263,7 @@ const sizeFmt = v => v.replace(/x/gi, '×');
 const ICONS = {   // Sàn: ván so le; Tấm ốp tường, Phụ kiện: Tabler layout-board, puzzle
   san: '<path d="M4 4h16v16H4zM4 9.3h16M4 14.6h16M9 4v5.3M15 9.3v5.3M9 14.6V20"/>',
   tuong: '<path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M4 9h8M12 15h8M12 4v16"/>',
+  thicong: '<path d="M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16l-3-2-2 2-2-2-2 2-2-2-3 2M9 7h6M9 11h6M13 15h2"/>',
   pk: '<path d="M4 7h3a1 1 0 0 0 1-1V5a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0-1 1v3a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1v-1a2 2 0 0 0-4 0v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a2 2 0 0 0 0-4H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1"/>',
 };
 // Cấu hình hiển thị từng mục: bộ lọc, thông tin chi tiết, cách ghi tồn kho
@@ -299,6 +307,7 @@ const S = {
   sort: 'default',
   fopen: null,
 };
+const TC = {id: 'thicong', title: 'Báo giá thi công', url: 'https://script.google.com/macros/s/AKfycbwFtwF_lgrLDa7YPUobkvOkL-aiiJQDBPBtV4B-0NJf5PO6lTLVRajE41Cgl_IAhNZ2rQ/exec'};
 const cur = () => S.data?.sections.find(x => x.id === S.sec) || S.data?.sections[0];
 const view = () => VIEW[cur()?.id] || VIEW.san;
 const unitOf = (sec, it) => (it.unit || sec.unit || 'hộp').toLowerCase();
@@ -345,9 +354,17 @@ function list() {
 /* ---------- Render ---------- */
 function render() {
   const secs = S.data?.sections || [];
-  if (secs.length && !secs.some(x => x.id === S.sec)) S.sec = secs[0].id;
+  if (secs.length && S.sec !== TC.id && !secs.some(x => x.id === S.sec)) S.sec = secs[0].id;
   $('#nav').innerHTML = secs.map(x =>
-    `<button class="${x.id === S.sec ? 'on' : ''}" data-cat="${esc(x.id)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[x.id] || ICONS.san}</svg>${esc(x.title)}<span class="n">${x.items.length}</span></button>`).join('');
+    `<button class="${x.id === S.sec ? 'on' : ''}" data-cat="${esc(x.id)}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[x.id] || ICONS.san}</svg>${esc(x.title)}<span class="n">${x.items.length}</span></button>`).join('') +
+    `<button class="${S.sec === TC.id ? 'on' : ''}" data-cat="${TC.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS.thicong}</svg>${TC.title}</button>`;
+  document.body.classList.toggle('on-tc', S.sec === TC.id);
+  if (S.sec === TC.id) {
+    document.title = TC.title + ' · Find Tiles';
+    // Tạo iframe một lần và giữ lại, chuyển tab qua lại không mất số đang nhập
+    if (!$('#tc iframe')) $('#tc').innerHTML = `<iframe src="${TC.url}" title="${TC.title}"></iframe>`;
+    return;
+  }
   const sec = cur();
   document.title = sec?.title ? sec.title + ' · Find Tiles' : 'Find Tiles';
   $('#updated').textContent = sec?.updated ? `Tồn kho cập nhật đến ngày ${sec.updated}` : ' ';
