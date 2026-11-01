@@ -362,7 +362,7 @@ function render() {
   if (S.sec === TC.id) {
     document.title = TC.title + ' · Find Tiles';
     // Tạo iframe một lần và giữ lại, chuyển tab qua lại không mất số đang nhập
-    if (!$('#tc iframe')) $('#tc').innerHTML = `<iframe src="${TC.url}" title="${TC.title}"></iframe>`;
+    if (!$('#tc iframe')) $('#tc').innerHTML = `<iframe src="${TC.url}" title="${TC.title}" allow="geolocation *"></iframe>`;
     return;
   }
   const sec = cur();
