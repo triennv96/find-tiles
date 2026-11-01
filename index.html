@@ -204,6 +204,11 @@ button{cursor:pointer;background:none;border:0;padding:0}
   .detail .img img{width:100%;max-height:none;border-radius:12px}
   .detail .info{padding:20px 16px 0}
 }
+.pdf-san-sang{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);padding:16px}
+.pdf-san-sang>div{background:#fff;color:#222;border-radius:14px;padding:20px;width:100%;max-width:340px;display:flex;flex-direction:column;gap:10px;text-align:center}
+.pdf-san-sang small{color:#777;word-break:break-all}
+.pdf-san-sang button{font:inherit;padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;color:#222;cursor:pointer}
+.pdf-san-sang .luu{background:#6b3fd4;border-color:#6b3fd4;color:#fff;font-weight:600}
 </style>
 </head>
 <body>
@@ -307,6 +312,30 @@ const S = {
   sort: 'default',
   fopen: null,
 };
+// Thêm vào màn hình chính trên điện thoại / iPad: không in được, báo giá tạo file PDF rồi gửi lên đây để lưu / chia sẻ
+const LA_APP = (matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) && navigator.maxTouchPoints > 1;
+window.addEventListener('message', e => {
+  if (!/\.googleusercontent\.com$/.test(new URL(e.origin).hostname) || !e.data || e.data.loai !== 'baoGiaPdf') return;
+  const file = new File([e.data.pdf], e.data.ten, {type: 'application/pdf'});
+  const hop = document.createElement('div');
+  hop.className = 'pdf-san-sang';
+  hop.innerHTML = `<div><b>Đã tạo xong file PDF</b><small>${esc(e.data.ten)}</small><button class="luu">Lưu / Chia sẻ PDF</button><button class="dong">Đóng</button></div>`;
+  document.body.appendChild(hop);
+  hop.querySelector('.dong').onclick = () => hop.remove();
+  hop.querySelector('.luu').onclick = async () => {
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      try { await navigator.share({files: [file], title: file.name}); hop.remove(); }
+      catch (err) { if (err.name !== 'AbortError') alert('Không chia sẻ được: ' + err.message); }
+      return;
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(file);
+    a.download = file.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    hop.remove();
+  };
+});
 const TC = {id: 'thicong', title: 'Báo giá thi công', url: 'https://script.google.com/macros/s/AKfycbwFtwF_lgrLDa7YPUobkvOkL-aiiJQDBPBtV4B-0NJf5PO6lTLVRajE41Cgl_IAhNZ2rQ/exec'};
 const cur = () => S.data?.sections.find(x => x.id === S.sec) || S.data?.sections[0];
 const view = () => VIEW[cur()?.id] || VIEW.san;
@@ -362,7 +391,7 @@ function render() {
   if (S.sec === TC.id) {
     document.title = TC.title + ' · Find Tiles';
     // Tạo iframe một lần và giữ lại, chuyển tab qua lại không mất số đang nhập
-    if (!$('#tc iframe')) $('#tc').innerHTML = `<iframe src="${TC.url}" title="${TC.title}" allow="geolocation *"></iframe>`;
+    if (!$('#tc iframe')) $('#tc').innerHTML = `<iframe src="${TC.url}${LA_APP ? '?app=1' : ''}" title="${TC.title}" allow="geolocation *"></iframe>`;
     return;
   }
   const sec = cur();
