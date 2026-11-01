@@ -324,7 +324,7 @@ window.addEventListener('message', e => {
   hop.querySelector('.dong').onclick = () => hop.remove();
   hop.querySelector('.luu').onclick = async () => {
     if (navigator.canShare && navigator.canShare({files: [file]})) {
-      try { await navigator.share({files: [file], title: file.name}); hop.remove(); }
+      try { await navigator.share({files: [file]}); hop.remove(); }
       catch (err) { if (err.name !== 'AbortError') alert('Không chia sẻ được: ' + err.message); }
       return;
     }
